@@ -1,26 +1,18 @@
-@import "tailwindcss";
+/* app/globals.css */
+@import "tailwindcss"; /* Or your preferred Tailwind import method */
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  /* Default Light Theme Variables */
+  --background-rgb: 249, 250, 251; /* A very light gray like Tailwind's gray-50 */
+  --foreground-rgb: 17, 24, 39; /* A dark gray like Tailwind's gray-900 */
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: rgb(var(--background-rgb));
+  --foreground: rgb(var(--foreground-rgb));
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--background); /* Ensures light background */
+  color: var(--foreground); /* Ensures dark text */
+  /* Font family would ideally be handled by Tailwind config,
+     but you can set a default sans-serif stack here if needed for now. */
 }
