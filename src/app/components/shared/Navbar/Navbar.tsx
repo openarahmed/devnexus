@@ -3,8 +3,17 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Menu, X, Rocket, LayoutDashboard, LogOut, LogIn } from "lucide-react"; // Added LayoutDashboard, LogOut, LogIn
+import {
+  Menu,
+  X,
+  Rocket,
+  LayoutDashboard,
+  LogOut,
+  LogIn,
+  UserCircle,
+} from "lucide-react"; // Added LayoutDashboard, LogOut, LogIn
 import { useAuth } from "../../../../context/AuthContext"; // <<--- IMPORT useAuth
+import Image from "next/image";
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -94,10 +103,32 @@ export default function Navbar() {
             {isAuthenticated ? (
               <>
                 {user?.name && (
-                  <span className="text-sm text-gray-700">
-                    Hi, {user.name}!
-                  </span>
+                  <Link href="dashboard">
+                    <span className="text-sm text-gray-700">
+                      Hi, {user.name}!
+                    </span>
+                  </Link>
                 )}
+                <Link href="/dashboard">
+                  <div className="flex items-center">
+                    {user &&
+                    typeof user.profilePictureUrl === "string" &&
+                    user.profilePictureUrl.trim() !== "" ? (
+                      <Image
+                        src={user.profilePictureUrl} // TypeScript should be happier here
+                        alt={user.name || "User profile picture"} // user.name since user is confirmed
+                        width={40}
+                        height={40}
+                        className="rounded-full h-15 w-15 object-cover border-[3px] border-yellow-400"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <UserCircle size={40} className="text-blue-400 mr-3" />
+                    )}
+                  </div>
+                </Link>
                 <button
                   onClick={logout}
                   className="px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 bg-red-500 text-white hover:bg-red-600 focus:ring-red-400 flex items-center"

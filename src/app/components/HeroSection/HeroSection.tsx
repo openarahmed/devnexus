@@ -113,7 +113,7 @@ const HeroSection: React.FC<HeroSectionProps> = () => {
         </p>
         <div className="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-6">
           <a
-            href="#questionnaire"
+            href="/questionnaire"
             className="inline-flex items-center justify-center px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-lg transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 text-lg"
           >
             Discover Your Developer DNA

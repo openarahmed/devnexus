@@ -1,4 +1,4 @@
-// models/user.ts (or wherever your schema is defined)
+// models/user.ts
 import mongoose from "mongoose";
 
 const UserSchema = new mongoose.Schema(
@@ -13,26 +13,24 @@ const UserSchema = new mongoose.Schema(
     password: {
       type: String,
       required: [true, "Password is required."],
-      select: false, // Good for security
+      select: false, // Password won't be returned by default in queries
     },
     name: {
-      // Ensure this field is present
       type: String,
-      required: [true, "Name is required."], // Make name required
+      required: [true, "Name is required."],
       trim: true,
     },
     profilePictureUrl: {
-      // New field for profile picture
       type: String,
       trim: true,
-      default: "", // Optional: provide a default placeholder URL
+      default: "", // Defaults to an empty string if not provided
     },
     isQuestionnaireCompleted: {
       type: Boolean,
       default: false,
     },
     answers: {
-      type: mongoose.Schema.Types.Mixed,
+      type: mongoose.Schema.Types.Mixed, // Or a more specific schema
       default: {},
     },
     interests: {
@@ -45,10 +43,11 @@ const UserSchema = new mongoose.Schema(
     },
   },
   {
-    timestamps: true,
+    timestamps: true, // Adds createdAt and updatedAt timestamps
   }
 );
 
+// Avoid recompiling the model if it already exists (common in Next.js dev mode)
 const User = mongoose.models.User || mongoose.model("User", UserSchema);
 
 export default User;

@@ -12,16 +12,17 @@ import { useRouter } from "next/navigation";
 
 interface User {
   id?: string;
-  email?: string; // Essential for profile fetching on dashboard
+  email?: string;
   name?: string;
-  hasCompletedQuestionnaire?: boolean; // As seen in your logs
+  hasCompletedQuestionnaire?: boolean;
+  profilePictureUrl?: string; // <-- ADD THIS LINE
   // Add other fields your API might return for the user
 }
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (userData: User, token?: string) => void; // token is optional
+  login: (userData: User, token?: string) => void;
   logout: () => void;
   isLoading: boolean;
 }
@@ -44,13 +45,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     if (storedUserString) {
       try {
         const parsedUser: User = JSON.parse(storedUserString);
-        // CRITICAL CHECK: Ensure the parsed user has a valid, non-empty email.
         if (
           parsedUser &&
           typeof parsedUser.email === "string" &&
           parsedUser.email.trim() !== ""
         ) {
-          setUser(parsedUser);
+          setUser(parsedUser); // This will now include profilePictureUrl if stored
           setIsAuthenticated(true);
           userIsValidAndLoaded = true;
           console.log(
@@ -59,14 +59,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           );
         } else {
           console.warn(
-            "AuthContext: User data in localStorage is invalid (missing or empty email). Clearing stored user.",
+            "AuthContext: User data in localStorage is invalid. Clearing.",
             parsedUser
           );
           localStorage.removeItem("devnexusUser");
         }
       } catch (e) {
         console.error(
-          "AuthContext: Error parsing user from localStorage. Clearing stored user.",
+          "AuthContext: Error parsing user from localStorage. Clearing.",
           e
         );
         localStorage.removeItem("devnexusUser");
@@ -79,39 +79,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     console.log(
       "AuthContext: Initialization complete. isLoading:",
       false,
-      "isAuthenticated (after attempt to load):",
+      "isAuthenticated (after load):",
       userIsValidAndLoaded
     );
-  }, []); // Empty dependency array ensures this runs only once on mount
+  }, []);
 
   const login = (userData: User, token?: string) => {
-    // token example, adapt if you use it
     console.log("AuthContext: login function called with userData:", userData);
-    // CRITICAL CHECK: Ensure userData for login has a valid, non-empty email.
     if (
       !userData ||
       typeof userData.email !== "string" ||
       userData.email.trim() === ""
     ) {
       console.error(
-        "AuthContext: Login attempt with invalid user data (missing or empty email). Aborting login.",
+        "AuthContext: Login attempt with invalid user data. Aborting.",
         userData
       );
-      // Optionally, provide user feedback here if this happens (e.g., throw an error, set an error state)
-      // For now, we'll just prevent login to avoid issues.
-      alert("Login failed: User data is incomplete. Email is missing."); // Basic feedback
+      alert("Login failed: User data is incomplete. Email is missing.");
       return;
     }
-    setUser(userData);
+    setUser(userData); // userData from login API should now include profilePictureUrl
     setIsAuthenticated(true);
     if (token) {
-      localStorage.setItem("authToken", token); // Example for token storage
+      localStorage.setItem("authToken", token);
     }
-    localStorage.setItem("devnexusUser", JSON.stringify(userData));
-    console.log(
-      "AuthContext: User logged in and data stored. Navigating to dashboard. User:",
-      userData
-    );
+    localStorage.setItem("devnexusUser", JSON.stringify(userData)); // Store the complete user object
+    console.log("AuthContext: User logged in and data stored. User:", userData);
     router.push("/dashboard");
   };
 
@@ -119,13 +112,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     console.log("AuthContext: logout function called");
     setUser(null);
     setIsAuthenticated(false);
-    localStorage.removeItem("authToken"); // Example for token removal
+    localStorage.removeItem("authToken");
     localStorage.removeItem("devnexusUser");
     console.log("AuthContext: User logged out. Navigating to /auth.");
-    router.push("/auth"); // Or your login page
+    router.push("/auth");
   };
 
-  // Optional: Log state changes for easier debugging during development
   useEffect(() => {
     console.log(
       "AuthContext State Update | isLoading:",

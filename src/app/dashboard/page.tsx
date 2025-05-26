@@ -5,7 +5,6 @@ import React, { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useRouter } from "next/navigation";
 import {
-  UserCircle,
   Settings,
   BarChart3,
   LogOutIcon,
@@ -16,8 +15,10 @@ import {
   Loader2,
   HelpCircle, // For Questionnaire
   Sparkles, // For AI Suggestion
-  ChevronsRight, // For Interests
+  ChevronsRight,
+  UserCircle, // For Interests
 } from "lucide-react";
+import Image from "next/image";
 
 interface ProfileData {
   email?: string; // This will come from auth user, but API might also return it
@@ -145,19 +146,34 @@ const DashboardPage: React.FC = () => {
           {/* Left Column: Profile Summary & Interests */}
           <div className="bg-gray-800/70 backdrop-blur-sm p-6 rounded-xl shadow-2xl border border-gray-700 flex flex-col">
             <div className="flex items-center mb-4">
-              <UserCircle size={36} className="text-blue-400 mr-3" />
+              {user &&
+              typeof user.profilePictureUrl === "string" &&
+              user.profilePictureUrl.trim() !== "" ? (
+                <Image
+                  src={user.profilePictureUrl} // TypeScript should be happier here
+                  alt={user.name || "User profile picture"} // user.name since user is confirmed
+                  width={40}
+                  height={40}
+                  className="rounded-full h-15 w-15 mr-3 object-cover border-[5px] border-yellow-400"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = "none";
+                  }}
+                />
+              ) : (
+                <UserCircle size={40} className="text-blue-400 mr-3" />
+              )}
               <h2 className="text-2xl font-semibold">Profile Summary</h2>
             </div>
             {user && (
               <ul className="space-y-1 text-gray-300 text-sm mb-4">
-                <li>
-                  <strong>Email:</strong> {user.email}
-                </li>
                 {user.name && (
                   <li>
                     <strong>Name:</strong> {user.name}
                   </li>
                 )}
+                <li>
+                  <strong>Email:</strong> {user.email}
+                </li>
               </ul>
             )}
             <hr className="border-gray-700 my-4" />
