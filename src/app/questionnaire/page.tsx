@@ -2,7 +2,7 @@
 // src/app/questionnaire/page.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react"; // Added useRef
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useRouter } from "next/navigation";
 import {
@@ -13,22 +13,23 @@ import {
   Zap,
   CheckCircle,
   Target,
-  ListChecks, // Still imported if parser uses it, but won't be rendered explicitly here
+  ListChecks,
   Sparkles,
   ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
 
-// --- Start of AI Suggestion Parsing Logic ---
+// --- AI Suggestion Parsing Logic (Should be at the top of the file) ---
 interface RoadmapHighlightItem {
   title: string;
   description: string;
   isProjectIdea?: boolean;
 }
 
-interface ParsedAISuggestion {
-  suggestedCareerPath?: string;
-  learningRoadmapHighlights: RoadmapHighlightItem[]; // Parser will still populate this
+interface FormattedSuggestionSection {
+  title?: string;
+  content?: string;
+  items?: RoadmapHighlightItem[];
 }
 
 const listItemRegex =
@@ -36,32 +37,37 @@ const listItemRegex =
 
 function parseAndStructureSuggestion(
   suggestionText: string | null | undefined
-): ParsedAISuggestion {
-  const parsed: ParsedAISuggestion = {
-    suggestedCareerPath: undefined,
-    learningRoadmapHighlights: [],
-  };
-
-  if (!suggestionText) return parsed;
-
+): FormattedSuggestionSection[] {
+  if (!suggestionText) {
+    return [];
+  }
+  const sections: FormattedSuggestionSection[] = [];
   const careerPathBlockMatch = suggestionText.match(
     /^\*\*(Suggested Career Path):\*\*\s*([\s\S]*?)(?=\n\n?\*\*(Learning Roadmap Highlights):\*\*|$)/i
   );
   let remainingTextForHighlights = suggestionText;
 
-  if (careerPathBlockMatch && careerPathBlockMatch[2]) {
-    parsed.suggestedCareerPath = careerPathBlockMatch[2].trim();
+  if (
+    careerPathBlockMatch &&
+    careerPathBlockMatch[1] &&
+    careerPathBlockMatch[2]
+  ) {
+    sections.push({
+      title: careerPathBlockMatch[1].trim(),
+      content: careerPathBlockMatch[2].trim(),
+    });
     remainingTextForHighlights = suggestionText
       .substring(careerPathBlockMatch[0].length)
       .trim();
   } else {
-    // If no clear "Suggested Career Path" title, check if "Learning Roadmap Highlights" exists later
-    // If not, assume the whole text might be the career path or a general suggestion.
     const highlightsTitleExists =
       /\*\*(Learning Roadmap Highlights):\*\*/i.test(suggestionText);
-    if (!highlightsTitleExists) {
-      parsed.suggestedCareerPath = suggestionText.trim(); // Treat whole thing as career path
-      return parsed; // No highlights to parse
+    if (!highlightsTitleExists && !careerPathBlockMatch) {
+      sections.push({
+        title: "AI Generated Suggestion",
+        content: suggestionText.trim(),
+      });
+      return sections;
     }
   }
 
@@ -70,34 +76,36 @@ function parseAndStructureSuggestion(
   );
   if (roadmapHighlightsBlockMatch && roadmapHighlightsBlockMatch[2]) {
     const highlightsContent = roadmapHighlightsBlockMatch[2].trim();
+    const roadmapItems: RoadmapHighlightItem[] = [];
     let match;
     listItemRegex.lastIndex = 0;
     while ((match = listItemRegex.exec(highlightsContent)) !== null) {
-      parsed.learningRoadmapHighlights.push({
+      roadmapItems.push({
         title: match[2].trim(),
         description: match[3].trim().replace(/\n\s*\n/g, "\n"),
         isProjectIdea: match[2].toLowerCase().includes("project idea"),
       });
     }
+    if (roadmapItems.length > 0) {
+      sections.push({
+        title: roadmapHighlightsBlockMatch[1].trim(),
+        items: roadmapItems,
+      });
+    } else if (highlightsContent) {
+      sections.push({
+        title: roadmapHighlightsBlockMatch[1].trim(),
+        content: highlightsContent,
+      });
+    }
   }
 
-  // If only career path was parsed and no highlights section found explicitly AFTER it.
-  if (
-    parsed.suggestedCareerPath &&
-    parsed.learningRoadmapHighlights.length === 0 &&
-    !roadmapHighlightsBlockMatch
-  ) {
-    // This means the entire text was likely just the career path. Highlights remain empty.
-  } else if (
-    !parsed.suggestedCareerPath &&
-    parsed.learningRoadmapHighlights.length === 0 &&
-    suggestionText
-  ) {
-    // Fallback if nothing structured was found, treat whole text as career path suggestion
-    parsed.suggestedCareerPath = suggestionText.trim();
+  if (sections.length === 0 && suggestionText) {
+    sections.push({
+      title: "AI Generated Suggestion",
+      content: suggestionText,
+    });
   }
-
-  return parsed;
+  return sections;
 }
 
 const renderFormattedText = (
@@ -124,87 +132,262 @@ const renderFormattedText = (
 };
 // --- End of AI Suggestion Parsing Logic ---
 
-const questions = [
+// --- Questions Array ---
+interface QuestionOption {
+  value: string;
+  label: string;
+}
+interface Question {
+  id: string;
+  text: string;
+  type: "radio" | "checkbox" | "text" | "textarea";
+  options?: QuestionOption[];
+  isMultiSelect?: boolean;
+  placeholder?: string;
+  required?: boolean;
+}
+
+const generalQuestions: Question[] = [
   {
-    id: "q1",
-    question: "What is your primary interest in development?",
-    options: ["Frontend", "Backend", "Fullstack", "DevOps", "AI/ML", "Mobile"],
-  },
-  {
-    id: "q2",
-    question: "What is your preferred work style or environment?",
+    id: "q1_tech_excitement",
+    text: "What excites you the most when using technology?",
+    type: "checkbox",
+    isMultiSelect: true,
+    required: true,
     options: [
-      "Fast-paced Startup",
-      "Structured Corporate",
-      "Independent Freelance",
-      "Fully Remote",
-      "Collaborative On-site",
+      {
+        value: "Browse_websites",
+        label: "Browse informative and beautiful websites",
+      },
+      { value: "using_mobile_apps", label: "Using helpful or fun mobile apps" },
+      {
+        value: "solving_problems_tech",
+        label: "Seeing technology solve complex problems",
+      },
+      {
+        value: "creating_digital_content",
+        label: "Creating digital content (art, videos, music)",
+      },
+      {
+        value: "gaming_interactive_exp",
+        label: "Playing games or using interactive experiences",
+      },
+      {
+        value: "other_excitement",
+        label: "Something else (I'll describe in interests)",
+      },
     ],
   },
   {
-    id: "q3",
-    question: "How much programming experience do you currently have?",
+    id: "q2_work_focus",
+    text: "Do you enjoy working more with visuals (like design), logic (like solving puzzles), or communication (like writing or talking)?",
+    type: "radio",
+    required: true,
     options: [
-      "Just starting out (None)",
-      "Beginner (0-1 year)",
-      "Intermediate (1-3 years)",
-      "Advanced (3+ years)",
+      { value: "visuals", label: "Visuals (Design, Aesthetics)" },
+      { value: "logic", label: "Logic (Puzzles, Systems, Problem-solving)" },
+      {
+        value: "communication",
+        label: "Communication (Writing, Explaining, Teamwork)",
+      },
+      { value: "balanced_mix", label: "A good mix of these" },
     ],
   },
   {
-    id: "q4",
-    question: "What type of projects excite you the most?",
+    id: "q3_online_learning",
+    text: "Have you ever tried learning something online (like a YouTube tutorial, online course, or blog)?",
+    type: "radio",
+    required: true,
     options: [
-      "Building beautiful UIs (Web Apps)",
-      "Creating robust APIs (Backend Systems)",
-      "Working with data (Data Science)",
-      "Automating processes (DevOps/Scripting)",
-      "Developing mobile experiences (Mobile Apps)",
+      { value: "yes_enjoyed", label: "Yes, and I enjoyed it" },
+      { value: "yes_hard", label: "Yes, but it was challenging for me" },
+      { value: "no_not_yet", label: "No, not yet, but I'm willing to try" },
     ],
   },
   {
-    id: "q5",
-    question:
-      "Which programming language are you most interested in or enjoy using?",
+    id: "q4_creation_aspiration",
+    text: "What kind of things would you love to create one day?",
+    type: "checkbox",
+    isMultiSelect: true,
+    required: true,
     options: [
-      "JavaScript/TypeScript",
-      "Python",
-      "Java",
-      "C#",
-      "Go",
-      "Rust",
-      "Other",
+      { value: "mobile_app_creation", label: "A mobile app" },
+      { value: "website_creation", label: "A personal website or blog" },
+      {
+        value: "online_business_creation",
+        label: "An online business or e-commerce site",
+      },
+      { value: "game_creation", label: "A game" },
+      {
+        value: "ai_tool_creation",
+        label: "A tool that uses AI to help people",
+      },
+      { value: "other_creation", label: "Something else entirely" },
     ],
+  },
+  {
+    id: "q5_learning_style_preference",
+    text: "Which of these learning styles suits you best?",
+    type: "radio",
+    required: true,
+    options: [
+      { value: "watching_videos", label: "Watching videos and demonstrations" },
+      {
+        value: "reading_articles",
+        label: "Reading articles, books, and documentation",
+      },
+      {
+        value: "hands_on_projects",
+        label: "Doing hands-on projects and experimenting",
+      },
+      {
+        value: "discussion_collaboration",
+        label: "Talking and discussing with others",
+      },
+      { value: "structured_courses", label: "Following structured courses" },
+    ],
+  },
+  {
+    id: "q6_teamwork_preference",
+    text: "Do you prefer working alone or in a team?",
+    type: "radio",
+    required: true,
+    options: [
+      { value: "mostly_alone", label: "Mostly alone" },
+      { value: "mostly_team", label: "Mostly in a team" },
+      { value: "balanced_solo_team_work", label: "A good balance of both" },
+    ],
+  },
+  {
+    id: "q7_dream_work_environment",
+    text: "What kind of work environment do you dream of?",
+    type: "radio",
+    required: true,
+    options: [
+      { value: "remote_work", label: "Remote (work from anywhere)" },
+      { value: "office_job", label: "Office job (structured, in-person)" },
+      {
+        value: "freelancing_work",
+        label: "Freelancing (flexible, project-based)",
+      },
+      { value: "startup_own_business", label: "Building my own startup" },
+      { value: "not_sure_environment", label: "Not sure yet" },
+    ],
+  },
+  {
+    id: "q8_weekly_learning_time",
+    text: "How much time can you realistically dedicate each week to learning new tech skills?",
+    type: "radio",
+    required: true,
+    options: [
+      { value: "time_very_low", label: "Less than 3 hours" },
+      { value: "time_low", label: "3 - 7 hours" },
+      { value: "time_medium", label: "8 - 15 hours" },
+      { value: "time_high", label: "15+ hours" },
+    ],
+  },
+  {
+    id: "q9_topics_of_interest",
+    text: "What topics do you find interesting or want to explore more? (Select all that apply)",
+    type: "checkbox",
+    isMultiSelect: true,
+    required: true,
+    options: [
+      { value: "websites_and_design", label: "Websites & Visual Design" },
+      { value: "mobile_app_dev", label: "Mobile Apps" },
+      { value: "game_dev", label: "Games & Interactive Media" },
+      { value: "ai_ml", label: "Artificial Intelligence & Machine Learning" },
+      {
+        value: "business_startups_tech",
+        label: "Business, E-commerce & Startups",
+      },
+      { value: "cybersecurity", label: "Cybersecurity & Digital Safety" },
+      {
+        value: "social_media_content_creation",
+        label: "Social Media & Content Creation Tech",
+      },
+      { value: "data_analysis", label: "Data, Numbers & Analytics" },
+      {
+        value: "not_sure_explore_topics",
+        label: "I’m not sure yet, open to exploring!",
+      },
+    ],
+  },
+  {
+    id: "q10_prior_tech_exposure",
+    text: "Have you used any programming tools or languages before (like HTML, Python, block-based coding like Scratch, etc.)?",
+    type: "radio",
+    required: true,
+    options: [
+      {
+        value: "completely_new_to_coding",
+        label: "No, I’m completely new to this",
+      },
+      {
+        value: "dabbled_basics",
+        label: "I’ve dabbled or tried a few basic things",
+      },
+      {
+        value: "built_small_exercises",
+        label: "I’ve built some small personal projects or exercises",
+      },
+      {
+        value: "solid_coding_experience",
+        label: "I have some solid experience or have taken courses",
+      },
+    ],
+  },
+  {
+    id: "q11_learning_language",
+    text: "What is your preferred language for learning technical content (e.g., English, বাংলা, Hindi)?",
+    type: "text",
+    required: false,
+    placeholder: "e.g., English",
+  },
+  {
+    id: "q12_short_term_goals",
+    text: "Do you have any specific goals you want to achieve in the next 1-2 years through tech? (e.g., get a specific job, build an app, start a business)",
+    type: "textarea",
+    required: false,
+    placeholder: "Describe your goals...",
   },
 ];
-const interestOptions = [
-  "Web Development",
-  "UI/UX Design",
-  "Data Analysis & Visualization",
-  "Machine Learning Engineering",
-  "Game Development",
-  "iOS/Android Development",
-  "Cloud Computing & Architecture",
-  "Cybersecurity",
-  "Blockchain Technology",
-];
+// --- END OF QUESTIONS ---
 
 export default function QuestionnairePage() {
   const { user, isAuthenticated, isLoading: authIsLoading } = useAuth();
   const router = useRouter();
-  const resultsRef = useRef<HTMLDivElement>(null); // <<--- REF FOR SCROLLING TO RESULTS
+  const resultsRef = useRef<HTMLDivElement>(null);
 
-  const [answers, setAnswers] = useState<{ [key: string]: string }>({});
-  const [interests, setInterests] = useState<string[]>([]);
+  const [answers, setAnswers] = useState<{ [key: string]: string | string[] }>(
+    {}
+  );
   const [rawSuggestionResult, setRawSuggestionResult] = useState<string | null>(
     null
   );
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const parsedSuggestion: ParsedAISuggestion = useMemo(() => {
-    return parseAndStructureSuggestion(rawSuggestionResult);
-  }, [rawSuggestionResult]);
+  const structuredSuggestionSections: FormattedSuggestionSection[] =
+    useMemo(() => {
+      return parseAndStructureSuggestion(rawSuggestionResult);
+    }, [rawSuggestionResult]);
+
+  // ---- DEFINE suggestionToDisplay HERE ----
+  const careerPathSection = structuredSuggestionSections.find((s) =>
+    s.title?.toLowerCase().includes("suggested career path")
+  );
+  const suggestionToDisplay =
+    careerPathSection?.content ||
+    (structuredSuggestionSections.length > 0 &&
+    structuredSuggestionSections[0]?.content &&
+    !structuredSuggestionSections[0].items
+      ? structuredSuggestionSections[0].content
+      : null) ||
+    (structuredSuggestionSections.length === 0 && rawSuggestionResult
+      ? rawSuggestionResult
+      : null);
+  // ---- END OF DEFINITION ----
 
   useEffect(() => {
     document.title = "Developer Questionnaire - DevNexus";
@@ -213,26 +396,38 @@ export default function QuestionnairePage() {
     }
   }, [isAuthenticated, authIsLoading, router]);
 
-  // Effect to scroll to results when they appear
   useEffect(() => {
     if ((rawSuggestionResult || submitError) && !submitLoading) {
-      resultsRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 100);
     }
   }, [rawSuggestionResult, submitError, submitLoading]);
 
-  function handleChange(questionId: string, value: string) {
-    setAnswers((prev) => ({ ...prev, [questionId]: value }));
-  }
-
-  function handleCheckboxChange(value: string) {
-    setInterests((prev) =>
-      prev.includes(value)
-        ? prev.filter((item) => item !== value)
-        : [...prev, value]
-    );
+  function handleInputChange(
+    questionId: string,
+    value: string,
+    questionType?: string,
+    isMultiSelect?: boolean
+  ) {
+    if (questionType === "checkbox" && isMultiSelect) {
+      setAnswers((prev) => {
+        const existingValues = (prev[questionId] as string[] | undefined) || [];
+        if (existingValues.includes(value)) {
+          return {
+            ...prev,
+            [questionId]: existingValues.filter((item) => item !== value),
+          };
+        } else {
+          return { ...prev, [questionId]: [...existingValues, value] };
+        }
+      });
+    } else {
+      setAnswers((prev) => ({ ...prev, [questionId]: value }));
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -243,20 +438,28 @@ export default function QuestionnairePage() {
       setSubmitError("User email not found. Please ensure you are logged in.");
       return;
     }
-    if (Object.keys(answers).length < questions.length) {
-      setSubmitError("Please answer all multiple-choice questions.");
-      return;
-    }
-    if (interests.length === 0) {
-      setSubmitError("Please select at least one specific interest.");
-      return;
+    for (const q of generalQuestions) {
+      if (q.required) {
+        const answer = answers[q.id];
+        if (!answer || (Array.isArray(answer) && answer.length === 0)) {
+          setSubmitError(`Please answer the question: "${q.text}"`);
+          return;
+        }
+      }
     }
     setSubmitLoading(true);
     try {
+      const interestsPayload =
+        (answers.q9_topics_of_interest as string[] | undefined) || [];
+      const apiPayload = {
+        email: user.email,
+        answers: answers,
+        interests: interestsPayload,
+      };
       const response = await fetch("/api/questionnaire", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: user.email, answers, interests }),
+        body: JSON.stringify(apiPayload),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -285,8 +488,6 @@ export default function QuestionnairePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-sky-100 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8">
-      {" "}
-      {/* Lighter background */}
       <div className="max-w-3xl mx-auto bg-white p-8 sm:p-10 rounded-xl shadow-2xl text-gray-800">
         <div className="text-center mb-8">
           <Zap
@@ -305,72 +506,123 @@ export default function QuestionnairePage() {
             </p>
           )}
         </div>
-        {/* Show form only if no result or error yet, OR if there was an error and user wants to retry */}
+
         {(!rawSuggestionResult || submitError) && (
           <form onSubmit={handleSubmit} className="space-y-8">
-            {questions.map(({ id, question, options }, index) => (
+            {generalQuestions.map((q, index) => (
               <div
-                key={id}
+                key={q.id}
                 className="p-5 border border-gray-300 rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow"
               >
-                <label
-                  htmlFor={id}
-                  className="block mb-2.5 text-lg font-semibold text-gray-800"
-                >
+                <label className="block mb-2.5 text-lg font-semibold text-gray-800">
                   <span className="text-blue-600 font-bold">Q{index + 1}:</span>{" "}
-                  {question}
+                  {q.text}
+                  {!q.required && (
+                    <span className="text-xs text-gray-500 ml-2">
+                      (Optional)
+                    </span>
+                  )}
                 </label>
-                <select
-                  id={id}
-                  required
-                  value={answers[id] || ""}
-                  onChange={(e) => handleChange(id, e.target.value)}
-                  className="w-full border-gray-300 rounded-md px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-700 bg-white text-base"
-                >
-                  <option value="" disabled>
-                    {" "}
-                    -- Select an option --{" "}
-                  </option>
-                  {options.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
+                {q.type === "radio" && q.options && (
+                  <div className="space-y-2 mt-2">
+                    {(q.options as QuestionOption[]).map((opt) => (
+                      <label
+                        key={opt.value}
+                        className="flex items-center space-x-3 p-2.5 hover:bg-blue-50/70 rounded-md cursor-pointer"
+                      >
+                        <input
+                          type="radio"
+                          name={q.id}
+                          value={opt.value}
+                          checked={
+                            (answers[q.id] as string | undefined) === opt.value
+                          }
+                          onChange={(e) =>
+                            handleInputChange(
+                              q.id,
+                              e.target.value,
+                              q.type,
+                              q.isMultiSelect
+                            )
+                          }
+                          required={q.required}
+                          className="form-radio h-5 w-5 text-blue-600 border-gray-400 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-white"
+                        />
+                        <span className="text-gray-700 select-none text-sm font-medium">
+                          {opt.label}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {q.type === "checkbox" && q.options && q.isMultiSelect && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 mt-2">
+                    {(q.options as QuestionOption[]).map((opt) => (
+                      <label
+                        key={opt.value}
+                        className="flex items-center space-x-3 p-2.5 hover:bg-blue-50/70 rounded-md cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          value={opt.value}
+                          checked={(
+                            (answers[q.id] as string[] | undefined) || []
+                          ).includes(opt.value)}
+                          onChange={() =>
+                            handleInputChange(
+                              q.id,
+                              opt.value,
+                              q.type,
+                              q.isMultiSelect
+                            )
+                          }
+                          className="form-checkbox h-5 w-5 text-blue-600 border-gray-400 rounded focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-white"
+                        />
+                        <span className="text-gray-700 select-none text-sm font-medium">
+                          {opt.label}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {q.type === "text" && (
+                  <input
+                    type="text"
+                    id={q.id}
+                    value={(answers[q.id] as string | undefined) || ""}
+                    onChange={(e) =>
+                      handleInputChange(
+                        q.id,
+                        e.target.value,
+                        q.type,
+                        q.isMultiSelect
+                      )
+                    }
+                    required={q.required}
+                    className="w-full border-gray-300 rounded-md px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-700 bg-white text-base"
+                    placeholder={q.placeholder || "Type your answer here..."}
+                  />
+                )}
+                {q.type === "textarea" && (
+                  <textarea
+                    id={q.id}
+                    value={(answers[q.id] as string | undefined) || ""}
+                    onChange={(e) =>
+                      handleInputChange(
+                        q.id,
+                        e.target.value,
+                        q.type,
+                        q.isMultiSelect
+                      )
+                    }
+                    rows={3}
+                    required={q.required}
+                    className="w-full border-gray-300 rounded-md px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-700 bg-white text-base"
+                    placeholder={q.placeholder || "Share your thoughts..."}
+                  />
+                )}
               </div>
             ))}
-
-            <div className="p-5 border border-gray-300 rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow">
-              <p className="mb-3 text-lg font-semibold text-gray-800">
-                <span className="text-blue-600 font-bold">
-                  Q{questions.length + 1}:
-                </span>{" "}
-                What are your specific interests?{" "}
-                <span className="text-sm font-normal text-gray-500">
-                  (Select all that apply)
-                </span>
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-                {interestOptions.map((opt) => (
-                  <label
-                    key={opt}
-                    className="flex items-center space-x-3 p-2.5 hover:bg-blue-50/70 rounded-md cursor-pointer transition-colors duration-150"
-                  >
-                    <input
-                      type="checkbox"
-                      value={opt}
-                      checked={interests.includes(opt)}
-                      onChange={() => handleCheckboxChange(opt)}
-                      className="form-checkbox h-5 w-5 text-blue-600 border-gray-400 rounded focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-white"
-                    />
-                    <span className="text-gray-700 select-none text-sm font-medium">
-                      {opt}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
             <div className="mt-10 pt-6 border-t border-gray-300 text-center">
               <button
                 type="submit"
@@ -389,8 +641,8 @@ export default function QuestionnairePage() {
             </div>
           </form>
         )}
-        {/* Result/Error Display Section - This will be scrolled into view */}
-        <div ref={resultsRef} className="mt-10 pt-8 border-t border-gray-300">
+
+        <div ref={resultsRef} className="mt-10 pt-8">
           {submitError && (
             <div className="p-6 bg-red-50 text-red-800 rounded-xl border-2 border-red-300 shadow-lg flex items-start">
               <AlertTriangle
@@ -398,25 +650,25 @@ export default function QuestionnairePage() {
                 className="text-red-600 mr-4 flex-shrink-0 mt-1"
               />
               <div>
+                {" "}
                 <h3 className="text-xl font-bold mb-1">
                   Oops! Something went wrong.
-                </h3>
-                <p className="text-md">{submitError}</p>
+                </h3>{" "}
+                <p className="text-md">{submitError}</p>{" "}
                 <button
                   onClick={() => {
                     setSubmitError(null);
-                    setRawSuggestionResult(
-                      null
-                    ); /* Optionally clear answers/interests */
+                    setRawSuggestionResult(null);
+                    setAnswers({});
                   }}
                   className="mt-4 text-sm text-blue-600 hover:underline font-semibold"
                 >
-                  Try filling the questionnaire again
+                  {" "}
+                  Try filling the questionnaire again{" "}
                 </button>
               </div>
             </div>
           )}
-
           {rawSuggestionResult && !submitError && (
             <section>
               <div className="text-center mb-8">
@@ -426,57 +678,38 @@ export default function QuestionnairePage() {
                 </h2>
               </div>
               <div className="bg-white p-6 sm:p-8 rounded-xl shadow-2xl border border-gray-200 space-y-6">
-                {/* Display ONLY Suggested Career Path */}
-                {parsedSuggestion.suggestedCareerPath ? (
+                {suggestionToDisplay ? ( // <<--- THIS IS WHERE THE ERROR OCCURS
                   <div>
                     <div className="flex items-center mb-3">
-                      <Target
+                      <Lightbulb
                         size={26}
                         className="text-yellow-500 mr-3 flex-shrink-0"
                       />
                       <h3 className="text-2xl font-bold text-gray-800">
-                        Suggested Career Path
+                        Suggested Career Path & Initial Steps
                       </h3>
                     </div>
                     <div className="text-md text-gray-700 leading-relaxed whitespace-pre-wrap prose max-w-none md:pl-10">
                       {renderFormattedText(
-                        parsedSuggestion.suggestedCareerPath,
+                        suggestionToDisplay,
                         "text-gray-700",
                         "text-blue-700"
                       )}
                     </div>
                   </div>
                 ) : (
-                  // Fallback if career path isn't parsed but raw result exists
-                  rawSuggestionResult && (
-                    <div>
-                      <div className="flex items-center mb-3">
-                        <Lightbulb
-                          size={24}
-                          className="text-yellow-500 mr-2.5 flex-shrink-0"
-                        />
-                        <h3 className="text-2xl font-semibold text-gray-700">
-                          AI Generated Suggestion
-                        </h3>
-                      </div>
-                      <div className="text-md text-gray-700 leading-relaxed whitespace-pre-wrap prose max-w-none">
-                        {renderFormattedText(
-                          rawSuggestionResult,
-                          "text-gray-700",
-                          "text-blue-700"
-                        )}
-                      </div>
-                    </div>
-                  )
+                  <p className="text-gray-500 italic">
+                    No specific suggestion could be extracted, but your full
+                    response has been saved. Check your dashboard for details.
+                  </p>
                 )}
-
-                {/* Learning Roadmap Highlights are NOT rendered here as per your request */}
 
                 <p className="mt-8 text-center">
                   <Link
                     href="/dashboard"
                     className="bg-green-600 text-white px-8 py-3 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all duration-150 ease-in-out font-semibold text-lg inline-flex items-center shadow-lg hover:shadow-green-500/40"
                   >
+                    {" "}
                     View Full Details on My Dashboard{" "}
                     <ArrowRight size={20} className="ml-2" />
                   </Link>
@@ -484,8 +717,7 @@ export default function QuestionnairePage() {
               </div>
             </section>
           )}
-        </div>{" "}
-        {/* End of resultsRef div */}
+        </div>
       </div>
     </div>
   );
