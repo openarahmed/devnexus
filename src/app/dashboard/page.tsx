@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // src/app/dashboard/page.tsx
 "use client";
 
@@ -5,6 +6,7 @@ import React, { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useRouter } from "next/navigation";
 import {
+  UserCircle,
   Settings,
   BarChart3,
   LogOutIcon,
@@ -13,15 +15,14 @@ import {
   ListChecks,
   AlertTriangle,
   Loader2,
-  HelpCircle, // For Questionnaire
-  Sparkles, // For AI Suggestion
+  HelpCircle,
   ChevronsRight,
-  UserCircle, // For Interests
 } from "lucide-react";
 import Image from "next/image";
+import FormattedAiSuggestion from "../components/FormattedAiSuggestion";
 
 interface ProfileData {
-  email?: string; // This will come from auth user, but API might also return it
+  email?: string;
   answers?: Record<string, string>;
   suggestion?: string;
   interests?: string[];
@@ -80,6 +81,80 @@ const DashboardPage: React.FC = () => {
     }
   }, [isAuthenticated, user, profileData, profileLoading]);
 
+  // Parse the suggestion text to extract roadmap items
+  const parseSuggestion = (suggestionText: string | null | undefined) => {
+    if (!suggestionText) return [];
+
+    const sections: {
+      title?: string;
+      content?: string;
+      items?: { title: string; description: string }[];
+    }[] = [];
+    let currentSection: {
+      title?: string;
+      content?: string;
+      items?: { title: string; description: string }[];
+    } | null = null;
+
+    const lines = suggestionText
+      .split("\n")
+      .filter((line) => line.trim() !== "");
+
+    lines.forEach((line) => {
+      const careerPathMatch = line.match(
+        /^\*\*Suggested Career Path:\*\*\s*(.*)/i
+      );
+      const roadmapHighlightsMatch = line.match(
+        /^\*\*Learning Roadmap Highlights:\*\*/i
+      );
+      const listItemMatch = line.match(/^(\d+)\.\s*\*\*(.*?):\*\*\s*(.*)/);
+      const projectIdeaMatch = line.match(
+        /^\*\*(Project Idea(?:s)?):\*\*\s*(.*)/i
+      );
+      const generalListItemMatch = line.match(/^(\d+)\.\s*(.*?)\s*-\s*(.*)/);
+
+      if (careerPathMatch) {
+        if (currentSection) sections.push(currentSection);
+        currentSection = {
+          title: "Suggested Career Path",
+          content: careerPathMatch[1].trim(),
+        };
+      } else if (roadmapHighlightsMatch) {
+        if (currentSection) sections.push(currentSection);
+        currentSection = { title: "Learning Roadmap Highlights", items: [] };
+      } else if (listItemMatch && currentSection?.items) {
+        currentSection.items.push({
+          title: listItemMatch[2].trim(),
+          description: listItemMatch[3].trim(),
+        });
+      } else if (projectIdeaMatch && currentSection?.items) {
+        currentSection.items.push({
+          title: projectIdeaMatch[1].trim(),
+          description: projectIdeaMatch[2].trim(),
+        });
+      } else if (generalListItemMatch && currentSection?.items) {
+        currentSection.items.push({
+          title: generalListItemMatch[2].trim(),
+          description: generalListItemMatch[3].trim(),
+        });
+      } else if (currentSection && currentSection.content) {
+        currentSection.content += `\n${line}`;
+      } else if (
+        currentSection &&
+        currentSection.items &&
+        currentSection.items.length > 0
+      ) {
+        const lastItem = currentSection.items[currentSection.items.length - 1];
+        lastItem.description += `\n${line}`;
+      }
+    });
+
+    if (currentSection) sections.push(currentSection);
+    return sections;
+  };
+
+  const sections = parseSuggestion(profileData?.suggestion);
+
   if (authIsLoading || !isAuthenticated) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white p-4">
@@ -90,7 +165,7 @@ const DashboardPage: React.FC = () => {
   }
 
   const renderProfileLoadingError = () => {
-    if (profileLoading) {
+    if (profileLoading && !profileData) {
       return (
         <div className="flex items-center justify-center text-gray-400 py-8 col-span-full">
           <Loader2 size={28} className="animate-spin mr-3" />
@@ -98,9 +173,9 @@ const DashboardPage: React.FC = () => {
         </div>
       );
     }
-    if (profileError) {
+    if (profileError && !profileData) {
       return (
-        <div className="bg-red-900/50 border border-red-700 text-red-300 p-4 rounded-md flex items-start col-span-full">
+        <div className="bg-red-900/50 border border-red-700 text-red-300 p-4 rounded-md flex items-start col-span-full mb-10">
           <AlertTriangle size={24} className="mr-3 mt-1 flex-shrink-0" />
           <div>
             <h4 className="font-semibold">Could not load insights</h4>
@@ -141,20 +216,20 @@ const DashboardPage: React.FC = () => {
           </div>
         </header>
 
-        {/* --- Top Row: Profile Info & Questionnaire Answers (2-column) --- */}
+        {renderProfileLoadingError()}
+
         <div className="grid md:grid-cols-2 gap-6 mb-10">
-          {/* Left Column: Profile Summary & Interests */}
           <div className="bg-gray-800/70 backdrop-blur-sm p-6 rounded-xl shadow-2xl border border-gray-700 flex flex-col">
             <div className="flex items-center mb-4">
               {user &&
-              typeof user.profilePictureUrl === "string" &&
-              user.profilePictureUrl.trim() !== "" ? (
+              typeof (user as any).profilePictureUrl === "string" &&
+              (user as any).profilePictureUrl.trim() !== "" ? (
                 <Image
-                  src={user.profilePictureUrl} // TypeScript should be happier here
-                  alt={user.name || "User profile picture"} // user.name since user is confirmed
+                  src={(user as any).profilePictureUrl}
+                  alt={user.name || "User profile picture"}
                   width={40}
                   height={40}
-                  className="rounded-full h-15 w-15 mr-3 object-cover border-[5px] border-yellow-400"
+                  className="rounded-full h-10 w-10 mr-3 object-cover border-2 border-yellow-400"
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = "none";
                   }}
@@ -183,7 +258,7 @@ const DashboardPage: React.FC = () => {
                 Identified Interests:
               </h3>
             </div>
-            {profileLoading && !profileData && (
+            {profileLoading && !profileData?.interests && (
               <p className="text-gray-500 italic">Loading interests...</p>
             )}
             {profileData?.interests && profileData.interests.length > 0 ? (
@@ -211,13 +286,12 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Right Column: Questionnaire Answers */}
           <div className="bg-gray-800/70 backdrop-blur-sm p-6 rounded-xl shadow-2xl border border-gray-700">
             <div className="flex items-center mb-4">
               <HelpCircle size={36} className="text-teal-400 mr-3" />
               <h2 className="text-2xl font-semibold">Questionnaire Summary</h2>
             </div>
-            {profileLoading && !profileData && (
+            {profileLoading && !profileData?.answers && (
               <p className="text-gray-500 italic">Loading answers...</p>
             )}
             {profileData?.answers &&
@@ -242,7 +316,7 @@ const DashboardPage: React.FC = () => {
                 </p>
               )
             )}
-            {profileError && !profileData && (
+            {profileError && !profileData?.answers && (
               <p className="text-red-400 italic">
                 Could not load questionnaire answers.
               </p>
@@ -250,63 +324,105 @@ const DashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* --- Middle Row: AI Career Suggestion (Full Width) --- */}
-        {
-          renderProfileLoadingError() /* Show general loading/error only if suggestion isn't specifically handled below */
-        }
-        {!profileLoading &&
-          profileData && ( // Only render this section if profileData is loaded
-            <section className="mb-10">
-              <div className="bg-gradient-to-r from-blue-700/50 to-green-700/50 p-6 rounded-xl shadow-2xl border border-blue-600">
-                <div className="flex items-start">
-                  <Sparkles
-                    size={36}
-                    className="text-yellow-300 mr-4 mt-1 flex-shrink-0"
-                  />
-                  <div>
-                    <h2 className="text-2xl font-semibold text-yellow-200 mb-2">
-                      AI Career Path Suggestion
-                    </h2>
-                    {profileData.suggestion ? (
-                      <p className="text-lg text-gray-100 leading-relaxed">
-                        {profileData.suggestion}
-                      </p>
-                    ) : (
-                      <p className="text-gray-400 italic">
-                        No career suggestion available yet. Complete your
-                        questionnaire to get one!
-                      </p>
-                    )}
-                  </div>
+        {(profileData || profileLoading || profileError) && (
+          <section className="mb-10">
+            {profileLoading && !profileData && (
+              <div className="flex items-center justify-center text-gray-400 py-8">
+                <Loader2 size={28} className="animate-spin mr-3" />
+                Loading AI Suggestion...
+              </div>
+            )}
+            {profileError && !profileData && (
+              <div className="bg-red-900/50 border border-red-700 text-red-300 p-4 rounded-md flex items-start">
+                <AlertTriangle size={24} className="mr-3 mt-1 flex-shrink-0" />
+                <div>
+                  <h4 className="font-semibold">
+                    Could not load AI Suggestion
+                  </h4>
+                  <p className="text-sm">{profileError}</p>
                 </div>
               </div>
-            </section>
-          )}
+            )}
 
-        {/* --- Bottom Row: Roadmap, Goals, Settings (Flexible Grid) --- */}
+            {profileData && !profileError && (
+              <div className="bg-gradient-to-r from-blue-800/60 via-blue-700/50 to-green-800/60 p-6 rounded-xl shadow-2xl border border-blue-700">
+                <FormattedAiSuggestion
+                  suggestionText={profileData.suggestion}
+                />
+              </div>
+            )}
+          </section>
+        )}
+
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
-          {/* Personalized Roadmap Card */}
           <div className="bg-gray-800 p-6 rounded-xl shadow-xl hover:shadow-green-500/20 transition-shadow duration-300 lg:col-span-2">
             <div className="flex items-center mb-4">
               <ListChecks size={36} className="text-green-400 mr-3" />
-              <h2 className="text-2xl font-semibold">Your Learning Roadmap</h2>
+              <h2 className="text-2xl font-semibold">
+                Your Learning Roadmap Visualizer
+              </h2>
             </div>
-            <p className="text-gray-400 mb-4">
-              Based on your profile and AI suggestion, your detailed
-              step-by-step learning path will be generated here.
-            </p>
-            <div className="border border-dashed border-gray-700 p-6 rounded-md text-center text-gray-500 mb-4 min-h-[150px] flex items-center justify-center">
-              <p>
-                Dynamic roadmap UI (e.g., using D3.js or a timeline library)
-                will appear here.
-              </p>
-            </div>
-            <button className="text-sm text-green-400 hover:underline flex items-center">
+
+            {profileLoading ? (
+              <div className="flex items-center justify-center text-gray-400 py-8">
+                <Loader2 size={28} className="animate-spin mr-3" />
+                Loading roadmap...
+              </div>
+            ) : (
+              <>
+                <p className="text-gray-400 mb-4">
+                  {profileData?.suggestion
+                    ? "Based on your profile and AI suggestion, here's your personalized learning path:"
+                    : "Complete your questionnaire to generate a personalized learning roadmap."}
+                </p>
+
+                {(() => {
+                  const roadmapSection = sections.find((s) =>
+                    s.title?.includes("Learning Roadmap Highlights")
+                  );
+
+                  return roadmapSection?.items ? (
+                    <div className="space-y-4">
+                      {roadmapSection.items.map((item, index) => (
+                        <div
+                          key={index}
+                          className="border-l-4 border-green-500 pl-4 py-2 bg-gray-700/30 rounded-r hover:bg-gray-700/50 transition-colors"
+                        >
+                          <h4 className="font-semibold text-green-300">
+                            {item.title.replace(/\*\*/g, "")}
+                          </h4>
+                          <p className="text-gray-300 text-sm mt-1">
+                            {item.description.split("\n").map((line, i) => (
+                              <React.Fragment key={i}>
+                                {line.replace(
+                                  /\*\*(.*?)\*\*/g,
+                                  "<strong>$1</strong>"
+                                )}
+                                <br />
+                              </React.Fragment>
+                            ))}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="border border-dashed border-gray-700 p-6 rounded-md text-center text-gray-500 mb-4 min-h-[150px] flex items-center justify-center">
+                      <p>
+                        {profileData
+                          ? "No roadmap items found in your suggestion."
+                          : "Complete your questionnaire to generate a personalized learning roadmap."}
+                      </p>
+                    </div>
+                  );
+                })()}
+              </>
+            )}
+
+            <button className="mt-4 text-sm text-green-400 hover:underline flex items-center">
               View & Manage Roadmap <ExternalLink size={14} className="ml-1" />
             </button>
           </div>
 
-          {/* Goals & Progress Card */}
           <div className="bg-gray-800 p-6 rounded-xl shadow-xl hover:shadow-yellow-500/20 transition-shadow duration-300">
             <div className="flex items-center mb-4">
               <BarChart3 size={36} className="text-yellow-400 mr-3" />
@@ -347,7 +463,6 @@ const DashboardPage: React.FC = () => {
             </button>
           </div>
 
-          {/* Account Settings Card (can be kept or moved) */}
           <div className="bg-gray-800 p-6 rounded-xl shadow-xl hover:shadow-purple-500/20 transition-shadow duration-300 md:col-span-2 lg:col-span-1">
             <div className="flex items-center mb-4">
               <Settings size={36} className="text-purple-400 mr-3" />

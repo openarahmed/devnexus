@@ -24,6 +24,7 @@ export default function Navbar() {
   };
 
   const navItems = [
+    { href: "/chat", label: "Chat" },
     { href: "/", label: "Home" },
     { href: "/#features", label: "Features" }, // Assuming you have an ID 'features' on your homepage
     { href: "/questionnaire", label: "Questionnaire" }, // Your existing link

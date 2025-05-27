@@ -1,5 +1,7 @@
 import React from "react";
 import { Github, Linkedin, Twitter, Copyright } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
 
 interface FooterLinkProps {
   href: string;
@@ -23,6 +25,19 @@ const Footer: React.FC<FooterProps> = () => {
 
   return (
     <footer className="bg-gray-900 text-gray-400 py-12 sm:py-16 px-6 sm:px-8">
+      <div>
+        <Link href="/chat">
+          {" "}
+          <Image
+            src="https://i.postimg.cc/qMnc0mQC/steptodown-com202563.png" // Path to your image in the public folder
+            alt="ChatBot"
+            width={500} // Desired width in pixels
+            height={500} // Desired height in pixels
+            priority // Optional: preload the image
+            className="w-15 absolute right-5 fixed bottom-5"
+          />
+        </Link>
+      </div>
       <div className="container mx-auto max-w-6xl">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
           <div>
